@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Font Family Sorter</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="game-container">
+    <h1>🎮 Font Family Sorter</h1>
+    <button id="startBtn">Start Game</button>
+    <div id="game" class="hidden">
+      <div class="cards-container" id="cardsContainer"></div>
+      <div class="categories">
+        <div class="category" data-family="Serif">Serif</div>
+        <div class="category" data-family="Sans Serif">Sans Serif</div>
+        <div class="category" data-family="Slab Serif">Slab Serif</div>
+        <div class="category" data-family="Script">Script</div>
+      </div>
+    </div>
+    <div class="feedback hidden" id="feedback"></div>
+    <div class="specimens" id="specimens"></div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
