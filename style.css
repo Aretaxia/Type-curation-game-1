@@ -1,6 +1,6 @@
 :root {
   --bg: #060606;      /* Dark 1 background */
-  --surface: #1E1E1E; /* Surface cards */
+  --surface: #060606; /* Surface cards */
   --accent: #E63946;  /* Red accent */
   --text: #FFFFFF;    /* White text */
   --muted: #AAAAAA;
