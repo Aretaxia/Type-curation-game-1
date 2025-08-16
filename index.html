@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Font Family Sorter — 16:9 Fixed, No Scroll</title>
+  <style>
+    :root{
+      --bg: #0b0c10;           /* page background */
+      --surface: #14161d;      /* cards, panels */
+      --surface-2:#1b1e27;     /* hovered/active */
+      --text: #e7e7ea;         /* primary text */
+      --muted:#9aa0a6;         /* secondary text */
+      --accent:#e11d48;        /* red accent */
+      --ok:#e7e7ea;            /* neutral success */
+      --border:#2a2e37;        /* subtle borders */
+      --shadow: 0 10px 24px rgba(0,0,0,.35);
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%; overflow:hidden;} /* prevent host/page scroll */
+    body{
+      margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif;
+      background:var(--bg); color:var(--text);
+      display:grid; place-items:center; padding:10px; /* small safe gutter */
+    }
+
+    /* 16:9 outer frame that never exceeds viewport */
+    .frame{
+      width:min(96vw, calc(96vh * (16 / 9)));
+      aspect-ratio:16 / 9;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:16px;
+      box-shadow: var(--shadow);
+      position:relative;
+      overflow:hidden; /* hard boundary; no internal scrollbars */
+    }
+
+    /* Fixed design canvas that scales to fit the frame */
+    .stage{
+      position:absolute; inset:0;
+      width:1280px; height:720px; /* base 16:9 */
+      transform-origin: top left;
+      overflow:hidden; /* NO scrollbars ever */
+      background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(0,0,0,0));
+    }
+
+    /* Layout inside the fixed stage uses CSS grid so it never grows past 720px */
+    .wrap{height:100%; padding:18px 24px; display:grid; grid-template-rows: auto auto 1fr auto; gap:10px}
+
+    .topbar{display:flex; align-items:baseline; gap:12px}
+    h1{margin:0; font-weight:700; letter-spacing:.2px; font-size:24px}
+    .instructions{color:var(--muted); margin:0; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+    .controls{display:flex; gap:8px; align-items:center}
+    button{
+      background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:8px 12px; cursor:pointer;
+      transition:transform .08s ease, background .2s ease, border-color .2s ease; box-shadow:var(--shadow); font-size:13px;
+    }
+    button:hover{background:#202432; border-color:#3a3f4b}
+    button:active{transform:translateY(1px)}
+    .status{margin-left:auto; color:var(--muted); font-size:12.5px}
+
+    /* Main area holds board (flexible) + pool (fixed 100px) and will never exceed available height */
+    .main{display:grid; grid-template-rows: 1fr 100px; gap:10px; min-height:0}
+
+    .board{display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; min-height:0;}
+    .column{
+      display:flex; flex-direction:column; gap:8px;
+      background:var(--surface); border:1px dashed var(--border); border-radius:14px; padding:12px; min-height:0; overflow:hidden;
+      transition:border-color .2s ease, background .2s ease;
+    }
+    .column h3{margin:0 0 6px; font-size:15px; font-weight:700; letter-spacing:.3px}
+    .hint{color:var(--muted); font-size:11px}
+    .column.drag-over{border-color:var(--accent); background:#181b26}
+
+    .pool{
+      background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:10px; display:flex; flex-wrap:wrap; align-content:flex-start; gap:8px; overflow:hidden;
+    }
+
+    .chip{user-select:none; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:8px 10px; display:inline-flex; align-items:center; gap:10px; cursor:grab;
+      transition: box-shadow .2s ease, background .2s ease, transform .08s ease; box-shadow: var(--shadow); font-size:14px;
+    }
+    .chip:hover{background:#202432}
+    .chip:active{transform:scale(.99)}
+    .chip .tag{font-size:10px; color:var(--muted); padding:2px 8px; border:1px solid var(--border); border-radius:999px}
+
+    .chip.correct{outline:2px solid var(--ok); outline-offset:2px}
+    .chip.wrong{animation:shake .3s linear 1}
+    @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+
+    /* Specimen dock: fixed slot at the bottom of stage (part of grid, not overlay) */
+    .dock{height:150px; background:#0f1117; border:1px solid var(--border); border-radius:12px; padding:12px; display:grid; grid-template-columns: 1fr 2fr; gap:10px}
+    .dock .label{font-size:12px; color:var(--muted)}
+    .specimen{background:transparent; border:0; border-radius:0; padding:0}
+    .specimen .display{font-size:26px; line-height:1.05; margin-bottom:6px}
+    .specimen .pangram{font-size:13px; color:var(--muted)}
+    .features{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px}
+    .feat{font-size:10.5px; color:var(--muted); border:1px solid var(--border); border-radius:999px; padding:3px 7px}
+
+    .toast{position:absolute; left:50%; bottom:8px; transform:translateX(-50%); background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:8px 12px; box-shadow:var(--shadow); display:none; font-size:12.5px}
+
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+    /* No media queries needed for the inner layout: the entire stage scales uniformly */
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lora:wght@400;700&family=Inter:wght@400;700&family=Montserrat:wght@600&family=Arvo:wght@700&family=Roboto+Slab:wght@700&family=Zilla+Slab:wght@700&family=Dancing+Script:wght@700&family=Pacifico&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="frame" id="frame">
+    <div class="stage" id="stage">
+      <div class="wrap">
+        <div class="topbar">
+          <h1>🎮 Font Family Sorter</h1>
+          <p class="instructions">Drag each chip into the correct family. Instant feedback + a visual specimen below.</p>
+        </div>
+
+        <div class="controls">
+          <button id="startBtn" aria-label="Start or restart the game">Start</button>
+          <button id="shuffleBtn" aria-label="Shuffle samples">Shuffle</button>
+          <button id="resetBtn" aria-label="Reset placements">Reset</button>
+          <div class="status" id="statusText">0 / 8 sorted</div>
+        </div>
+
+        <div class="main">
+          <div class="board" id="board">
+            <section class="column" data-category="Serif" aria-label="Serif dropzone">
+              <h3>Serif</h3>
+              <div class="hint">Small finishing strokes</div>
+            </section>
+            <section class="column" data-category="Sans Serif" aria-label="Sans Serif dropzone">
+              <h3>Sans Serif</h3>
+              <div class="hint">No finishing strokes</div>
+            </section>
+            <section class="column" data-category="Slab Serif" aria-label="Slab Serif dropzone">
+              <h3>Slab Serif</h3>
+              <div class="hint">Thick block-like serifs</div>
+            </section>
+            <section class="column" data-category="Script" aria-label="Script dropzone">
+              <h3>Script</h3>
+              <div class="hint">Flowing handwriting</div>
+            </section>
+          </div>
+
+          <div class="pool" id="pool" aria-label="Font pool"></div>
+        </div>
+
+        <div class="dock" id="dock">
+          <div class="label">
+            <div><strong>Specimen</strong></div>
+            <div id="dockLabel">Drop a font to preview its features.</div>
+          </div>
+          <div id="dockContent"></div>
+        </div>
+
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
+        <div class="sr-only" id="ariaLive" aria-live="assertive"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // -------------------- Fit stage to 16:9 frame (no overflow) --------------------
+    const BASE_W = 1280, BASE_H = 720;
+    const frameEl = document.getElementById('frame');
+    const stageEl = document.getElementById('stage');
+
+    function fitStage(){
+      const fw = frameEl.clientWidth;
+      const fh = frameEl.clientHeight;
+      const scale = Math.min(fw/BASE_W, fh/BASE_H);
+      stageEl.style.transform = `scale(${scale})`;
+      const x = (fw - BASE_W * scale) / 2;
+      const y = (fh - BASE_H * scale) / 2;
+      stageEl.style.left = x + 'px';
+      stageEl.style.top  = y + 'px';
+    }
+    window.addEventListener('resize', fitStage);
+    window.addEventListener('load', fitStage);
+
+    // -------------------- Game Data --------------------
+    const ITEMS = [
+      { id:'playfair', label:'Playfair Display', family:'Serif', style:"'Playfair Display', serif", features:['High contrast','Vertical stress','Elegant serifs'], display:'Hamburgefonstiv', pangram:'The quick brown fox jumps over the lazy dog 12345.' },
+      { id:'lora', label:'Lora', family:'Serif', style:"Lora, serif", features:['Readable at body sizes','Traditional serifs','Calligraphic roots'], display:'Aa Gg 123', pangram:'A quirky jived fox nymph grabs quick waltz.' },
+      { id:'inter', label:'Inter', family:'Sans Serif', style:"Inter, system-ui, sans-serif", features:['No serifs','Low contrast','Optimized for screens'], display:'Aa Gg 123', pangram:'Sphinx of black quartz, judge my vow.' },
+      { id:'montserrat', label:'Montserrat', family:'Sans Serif', style:"Montserrat, sans-serif", features:['Geometric shapes','Wide apertures','Modern feel'], display:'HAMBURGEFONTSIV', pangram:'Pack my box with five dozen liquor jugs.' },
+      { id:'robotoslab', label:'Roboto Slab', family:'Slab Serif', style:"'Roboto Slab', serif", features:['Blocky serifs','Sturdy shapes','Friendly yet bold'], display:'Aa Gg 123', pangram:'How vexingly quick daft zebras jump!' },
+      { id:'arvo', label:'Arvo', family:'Slab Serif', style:"Arvo, serif", features:['Rectangular serifs','Stable rhythm','Strong headlines'], display:'HAMBURGEFONTSIV', pangram:'Waltz, bad nymph, for quick jigs vex.' },
+      { id:'dancingscript', label:'Dancing Script', family:'Script', style:"'Dancing Script', cursive", features:['Connected strokes','Casual handwriting','Dynamic baseline'], display:'Hello, Typography!', pangram:'The quick brown fox jumps over the lazy dog.' },
+      { id:'pacifico', label:'Pacifico', family:'Script', style:"Pacifico, cursive", features:['Playful curves','Bold stroke','Retro vibe'], display:'Signature Style', pangram:'Glib jocks quiz nymph to vex dwarf.' }
+    ];
+
+    // -------------------- State --------------------
+    let placed = 0;
+    const pool = document.getElementById('pool');
+    const statusText = document.getElementById('statusText');
+    const startBtn = document.getElementById('startBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const toast = document.getElementById('toast');
+    const ariaLive = document.getElementById('ariaLive');
+    const dockContent = document.getElementById('dockContent');
+    const dockLabel = document.getElementById('dockLabel');
+
+    const shuffle = arr => arr.map(v=>[Math.random(),v]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+    function updateStatus(){ statusText.textContent = `${placed} / ${ITEMS.length} sorted`; }
+    function speak(msg){ ariaLive.textContent = msg; }
+    function showToast(msg){ toast.textContent = msg; toast.style.display='block'; clearTimeout(showToast._t); showToast._t = setTimeout(()=> toast.style.display='none', 1200); }
+
+    function renderPool(order){
+      pool.innerHTML = '';
+      order.forEach(item => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.draggable = true;
+        chip.dataset.id = item.id;
+        chip.dataset.family = item.family;
+        chip.innerHTML = `<span style="font-family:${item.style}; line-height:1;">${item.label}</span> <span class="tag">Drag me</span>`;
+        chip.addEventListener('dragstart', (e)=>{ e.dataTransfer.setData('text/plain', item.id); });
+        chip.addEventListener('dragend', ()=>{ document.querySelectorAll('.column').forEach(c=>c.classList.remove('drag-over')); });
+        pool.appendChild(chip);
+      });
+    }
+
+    function specimenCard(item){
+      const wrap = document.createElement('div');
+      wrap.className = 'specimen';
+      wrap.innerHTML = `
+        <div class="display" style="font-family:${item.style};">${item.display}</div>
+        <div class="pangram" style="font-family:${item.style};">${item.pangram}</div>
+        <div class="features">${item.features.map(f=>`<span class='feat'>${f}</span>`).join('')}</div>
+      `;
+      return wrap;
+    }
+
+    function showInDock(item){
+      dockLabel.textContent = `${item.label} — ${item.family}`;
+      dockContent.innerHTML = '';
+      dockContent.appendChild(specimenCard(item));
+    }
+
+    function attachDnD(){
+      document.querySelectorAll('.column').forEach(col=>{
+        col.addEventListener('dragover', e=>{ e.preventDefault(); });
+        col.addEventListener('dragenter', ()=> col.classList.add('drag-over'));
+        col.addEventListener('dragleave', ()=> col.classList.remove('drag-over'));
+        col.addEventListener('drop', e=>{
+          e.preventDefault();
+          const id = e.dataTransfer.getData('text/plain');
+          const item = ITEMS.find(x=>x.id===id);
+          const chip = document.querySelector(`.chip[data-id="${id}"]`);
+          col.classList.remove('drag-over');
+          if(!item || !chip) return;
+
+          if(col.dataset.category === item.family){
+            chip.classList.add('correct');
+            chip.querySelector('.tag').textContent = 'Placed';
+            chip.setAttribute('aria-label', `${item.label} placed in ${item.family}`);
+            chip.style.cursor='default';
+            chip.draggable=false;
+            if(!chip._placed){ placed++; chip._placed = true; }
+            updateStatus();
+            speak(`${item.label} is correct for ${item.family}`);
+            col.appendChild(chip);
+            showInDock(item); // ✅ visual example without changing layout height
+            if(placed === ITEMS.length){ showToast('All sorted! Great eye.'); }
+          } else {
+            chip.classList.remove('correct');
+            chip.classList.add('wrong');
+            speak(`Not ${col.dataset.category}. Try ${item.family}.`);
+            showToast(`❌ ${item.label} is not ${col.dataset.category}`);
+            setTimeout(()=> chip.classList.remove('wrong'), 320);
+          }
+        });
+      });
+    }
+
+    function resetColumns(){
+      document.querySelectorAll('.column').forEach(c=>{
+        const name = c.dataset.category;
+        const hint = name==='Serif'? 'Small finishing strokes': name==='Sans Serif'? 'No finishing strokes': name==='Slab Serif'? 'Thick block-like serifs': 'Flowing handwriting';
+        c.innerHTML = `<h3>${name}</h3><div class='hint'>${hint}</div>`;
+      });
+    }
+
+    function start(){
+      placed = 0; updateStatus(); resetColumns(); renderPool(shuffle(ITEMS));
+      dockLabel.textContent = 'Drop a font to preview its features.';
+      dockContent.innerHTML = '';
+    }
+
+    function reset(){
+      placed = 0; updateStatus();
+      const chips = [...document.querySelectorAll('.chip')];
+      chips.forEach(ch=>{ ch.classList.remove('correct','wrong'); ch.draggable=true; ch.querySelector('.tag').textContent='Drag me'; pool.appendChild(ch); ch._placed=false; });
+      dockLabel.textContent = 'Drop a font to preview its features.';
+      dockContent.innerHTML = '';
+      resetColumns();
+    }
+
+    document.getElementById('startBtn').addEventListener('click', start);
+    document.getElementById('shuffleBtn').addEventListener('click', ()=> renderPool(shuffle(ITEMS)));
+    document.getElementById('resetBtn').addEventListener('click', reset);
+
+    // Init
+    renderPool(ITEMS); attachDnD(); updateStatus(); fitStage();
+  </script>
+</body>
+</html>
